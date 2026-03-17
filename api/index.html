@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Opportunity Analyzer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0f; --surface: #12121a; --surface2: #1a1a28;
+    --border: #2a2a3d; --accent: #6c63ff; --accent2: #a78bfa;
+    --green: #10b981; --yellow: #f59e0b; --red: #ef4444;
+    --text: #e2e8f0; --muted: #94a3b8;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+  .header { text-align: center; padding: 48px 24px 32px; border-bottom: 1px solid var(--border); }
+  .header h1 { font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, #6c63ff, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .header p { color: var(--muted); margin-top: 8px; font-size: 0.95rem; }
+  .container { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+  .input-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 28px; }
+  .input-card label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .input-row { display: flex; gap: 12px; }
+  .input-row input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; color: var(--text); font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
+  .input-row input:focus { border-color: var(--accent); }
+  .input-row input::placeholder { color: var(--muted); }
+  .btn { background: linear-gradient(135deg, #6c63ff, #a78bfa); color: #fff; border: none; border-radius: 10px; padding: 14px 28px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s, transform 0.1s; white-space: nowrap; }
+  .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .loader { display: none; text-align: center; padding: 48px; }
+  .loader.show { display: block; }
+  .spinner { width: 48px; height: 48px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loader-steps { display: flex; flex-direction: column; gap: 8px; max-width: 300px; margin: 16px auto 0; }
+  .step { font-size: 0.85rem; color: var(--muted); padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); transition: all 0.3s; }
+  .step.active { color: var(--accent2); border-color: var(--accent); background: rgba(108,99,255,0.08); }
+  .step.done { color: var(--green); border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.05); }
+  .report { display: none; }
+  .report.show { display: block; }
+  .action-bar { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+  .new-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 10px 18px; border-radius: 10px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; }
+  .new-btn:hover { border-color: var(--accent); color: var(--accent2); }
+  .pdf-btn { background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; padding: 10px 18px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+  .pdf-btn:hover { opacity: 0.88; }
+  .gamma-btn { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; padding: 10px 18px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+  .gamma-btn:hover { opacity: 0.88; }
+  .lead-score-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 20px; display: flex; align-items: center; gap: 28px; }
+  .score-ring { position: relative; width: 110px; height: 110px; flex-shrink: 0; }
+  .score-ring svg { transform: rotate(-90deg); }
+  .score-ring .score-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .score-text .num { font-size: 1.8rem; font-weight: 800; }
+  .score-text .lbl { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .lead-info h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
+  .lead-info p { color: var(--muted); font-size: 0.9rem; }
+  .score-badge { display: inline-block; margin-top: 10px; padding: 4px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  @media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } .input-row { flex-direction: column; } .lead-score-card { flex-direction: column; } .action-bar { flex-direction: column; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+  .card h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent2); margin-bottom: 16px; }
+  .info-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border); gap: 12px; }
+  .info-row:last-child { border-bottom: none; }
+  .info-row .key { color: var(--muted); font-size: 0.85rem; flex-shrink: 0; }
+  .info-row .val { font-size: 0.88rem; text-align: right; word-break: break-word; }
+  .info-row .val a { color: var(--accent2); text-decoration: none; }
+  .solutions-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 20px; }
+  .solutions-card h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent2); margin-bottom: 6px; }
+  .solutions-hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 18px; }
+  .solution { border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 10px; background: var(--surface2); transition: border-color 0.2s, background 0.2s; cursor: pointer; }
+  .solution:hover { border-color: var(--accent); }
+  .solution.selected { border-color: var(--accent); background: rgba(108,99,255,0.07); }
+  .sol-top { display: flex; align-items: flex-start; gap: 12px; }
+  .sol-checkbox { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--border); background: var(--surface); flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+  .solution.selected .sol-checkbox { background: var(--accent); border-color: var(--accent); }
+  .sol-checkbox svg { display: none; }
+  .solution.selected .sol-checkbox svg { display: block; }
+  .sol-body { flex: 1; }
+  .sol-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; gap: 12px; }
+  .sol-header h4 { font-size: 0.95rem; font-weight: 600; }
+  .sol-tags { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex-shrink: 0; }
+  .tag { padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+  .tag.quick { background: rgba(16,185,129,0.15); color: var(--green); }
+  .tag.mid { background: rgba(245,158,11,0.15); color: var(--yellow); }
+  .tag.strategic { background: rgba(108,99,255,0.15); color: var(--accent2); }
+  .sol-desc { color: var(--muted); font-size: 0.84rem; line-height: 1.5; margin-bottom: 10px; }
+  .sol-pricing { display: flex; gap: 10px; flex-wrap: wrap; }
+  .price-pill { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 0.78rem; }
+  .price-pill span { color: var(--muted); display: block; font-size: 0.68rem; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .price-pill strong { color: var(--text); }
+  .total-box { margin-top:16px; padding:14px; background:rgba(108,99,255,0.08); border-radius:10px; border:1px solid rgba(108,99,255,0.2); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  .total-box .total-label { color:var(--muted); font-size:0.82rem; }
+  .total-box .total-val { font-size:1rem; font-weight:700; color:var(--accent2); }
+  .outreach-card { background: linear-gradient(135deg, rgba(108,99,255,0.08), rgba(167,139,250,0.08)); border: 1px solid rgba(108,99,255,0.3); border-radius: 16px; padding: 24px; margin-bottom: 20px; }
+  .outreach-card h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent2); margin-bottom: 12px; }
+  .outreach-card p { font-size: 0.9rem; line-height: 1.7; color: var(--text); white-space: pre-wrap; }
+  .copy-btn { margin-top: 14px; background: rgba(108,99,255,0.2); border: 1px solid rgba(108,99,255,0.4); color: var(--accent2); padding: 8px 18px; border-radius: 8px; font-size: 0.82rem; cursor: pointer; transition: background 0.2s; }
+  .copy-btn:hover { background: rgba(108,99,255,0.35); }
+  .error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 12px; padding: 16px; color: #fca5a5; font-size: 0.9rem; margin-top: 16px; display: none; }
+  .error.show { display: block; }
+
+  /* Modal */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:1000; align-items:center; justify-content:center; padding:20px; }
+  .modal-overlay.show { display:flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; max-width: 680px; width:100%; max-height:80vh; display:flex; flex-direction:column; }
+  .modal h3 { font-size:1rem; font-weight:700; margin-bottom:4px; }
+  .modal .modal-sub { font-size:0.82rem; color:var(--muted); margin-bottom:16px; }
+  .modal textarea { flex:1; min-height:320px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:14px; color:var(--text); font-size:0.82rem; line-height:1.6; resize:none; outline:none; font-family:inherit; }
+  .modal-actions { display:flex; gap:10px; margin-top:14px; justify-content:flex-end; }
+  .modal-close { background:transparent; border:1px solid var(--border); color:var(--muted); padding:9px 18px; border-radius:8px; cursor:pointer; font-size:0.85rem; }
+  .modal-copy { background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; border:none; padding:9px 20px; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; }
+
+  /* PDF print */
+  @media print {
+    body { background:#fff !important; color:#111 !important; }
+    .action-bar, .copy-btn, .modal-overlay, .input-card, .loader, .solutions-hint { display:none !important; }
+    .header { border:none; padding:16px 0; }
+    .header h1 { -webkit-text-fill-color:#6c63ff !important; }
+    .card, .solutions-card, .outreach-card, .lead-score-card { background:#fff !important; border:1px solid #ddd !important; break-inside:avoid; margin-bottom:12px; }
+    .solution { background:#f9f9f9 !important; break-inside:avoid; }
+    .price-pill { background:#f3f4f6 !important; border:1px solid #e5e7eb !important; }
+    .total-box { background:#f5f3ff !important; }
+    .sol-checkbox { display:none !important; }
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .tag.quick { background:#d1fae5 !important; color:#065f46 !important; }
+    .tag.mid { background:#fef3c7 !important; color:#92400e !important; }
+    .tag.strategic { background:#ede9fe !important; color:#4c1d95 !important; }
+  }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>⚡ AI Opportunity Analyzer</h1>
+  <p>Paste any business URL — AI searches and builds a full proposal automatically</p>
+</div>
+<div class="container">
+  <div class="input-card">
+    <label>Business Website URL</label>
+    <div class="input-row">
+      <input type="text" id="url-input" placeholder="https://example.com" onkeydown="if(event.key==='Enter')analyze()" />
+      <button class="btn" id="analyze-btn" onclick="analyze()">Analyze →</button>
+    </div>
+    <div class="error" id="error-box"></div>
+  </div>
+
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <div class="loader-steps">
+      <div class="step" id="step1">🔍 Searching the web for business info...</div>
+      <div class="step" id="step2">📊 Extracting contact & company data...</div>
+      <div class="step" id="step3">🤖 Generating AI opportunity report...</div>
+      <div class="step" id="step4">📝 Building outreach message...</div>
+    </div>
+  </div>
+
+  <div class="report" id="report"></div>
+</div>
+
+<!-- Gamma Modal -->
+<div class="modal-overlay" id="gamma-modal">
+  <div class="modal">
+    <h3>⚡ Gamma Presentation Prompt</h3>
+    <p class="modal-sub">Copy this prompt and paste it into <strong>gamma.app</strong> → "Generate with AI"</p>
+    <textarea id="gamma-text" readonly></textarea>
+    <div class="modal-actions">
+      <button class="modal-close" onclick="closeGamma()">Close</button>
+      <button class="modal-copy" onclick="copyGamma()">📋 Copy Prompt</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let steps = ['step1','step2','step3','step4'];
+let stepIdx = 0, stepTimer, lastReport = null;
+
+function startSteps() {
+  stepIdx = 0;
+  steps.forEach(s => document.getElementById(s).className = 'step');
+  document.getElementById(steps[0]).classList.add('active');
+  stepTimer = setInterval(() => {
+    if (stepIdx < steps.length) {
+      document.getElementById(steps[stepIdx]).className = 'step done';
+      stepIdx++;
+      if (stepIdx < steps.length) document.getElementById(steps[stepIdx]).classList.add('active');
+    }
+  }, 2200);
+}
+function stopSteps() {
+  clearInterval(stepTimer);
+  steps.forEach(s => document.getElementById(s).className = 'step done');
+}
+function showError(msg) {
+  const b = document.getElementById('error-box');
+  b.textContent = msg; b.classList.add('show');
+}
+
+async function analyze() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) { showError('Please enter a website URL.'); return; }
+  document.getElementById('error-box').classList.remove('show');
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('loader').classList.add('show');
+  document.getElementById('report').classList.remove('show');
+  startSteps();
+
+  const prompt = `You are an expert AI sales consultant. Analyze this business website: ${url}
+
+Use web search to research the business thoroughly. Find their name, services, contact info (email, phone, address, social media), key staff (CEO, owner, founder, director), industry, size, and pain points.
+
+Then produce a JSON object. Respond ONLY with valid JSON — no markdown, no backticks, no extra text.
+
+IMPORTANT for leadScore: Calculate it dynamically based on these criteria (0-100):
+- Business has clear digital presence and active website: +15
+- Industry is highly suitable for AI automation (hospitality, retail, services, healthcare, real estate, legal, etc): +20
+- Business appears to have repetitive manual processes: +15
+- Business has staff/team (not solo): +10
+- Business has existing budget signals (paid ads, multiple locations, ecommerce): +15
+- Contact info is available and reachable: +10
+- Business is growing or has growth potential: +15
+Subtract points if: very small/solo operation (-10), already tech-advanced (-10), non-commercial/nonprofit (-15)
+
+{
+  "business": {
+    "name": "Company name",
+    "industry": "Industry/niche",
+    "description": "2-3 sentence summary",
+    "size": "Solo / Small / Medium / Large",
+    "location": "City, Country or Unknown",
+    "website": "${url}",
+    "email": "email or null",
+    "phone": "phone or null",
+    "address": "address or null",
+    "social": "social links or null",
+    "currentTools": "detected tools or Unknown",
+    "keyContact": "CEO/Owner/Founder name and title if found, else null"
+  },
+  "leadScore": 74,
+  "leadRating": "Hot Lead",
+  "leadJustification": "2-3 sentences explaining the exact score based on the criteria above",
+  "painPoints": ["Specific pain point 1", "Specific pain point 2", "Specific pain point 3"],
+  "solutions": [
+    {
+      "title": "Solution name",
+      "description": "What it does and why this specific business needs it (2-3 sentences)",
+      "priority": "Quick Win",
+      "setupFee": "€500–€1,200",
+      "monthlyFee": "€200–€400/mo"
+    }
+  ],
+  "totalSetup": "€1,500–€3,500",
+  "totalMonthly": "€600–€1,200/mo",
+  "outreachMessage": "Full personalized cold outreach email with subject line. Reference specific things about their business and address it to the key contact if found."
+}
+
+Rules:
+- Priority: "Quick Win", "Mid-term", or "Strategic"
+- Lead rating: "Cold Lead", "Warm Lead", "Hot Lead", "Premier Lead"
+- 3–5 solutions
+- Monthly fees realistic for SMBs: €150–€700/mo per solution max
+- Setup: €300–€2,000 per solution
+- Be specific to THIS business, not generic`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content.map(b => b.type === 'text' ? b.text : '').filter(Boolean).join('');
+    const clean = text.replace(/```json|```/g, '').trim();
+    let report;
+    try { report = JSON.parse(clean); }
+    catch(e) {
+      const match = clean.match(/\{[\s\S]*\}/);
+      if (match) report = JSON.parse(match[0]);
+      else throw new Error('Parse failed');
+    }
+    lastReport = report;
+    // default all selected
+    lastReport.solutions = lastReport.solutions.map((s,i) => ({...s, selected: true, id: i}));
+    stopSteps();
+    document.getElementById('loader').classList.remove('show');
+    document.getElementById('analyze-btn').disabled = false;
+    renderReport(report);
+  } catch(e) {
+    stopSteps();
+    document.getElementById('loader').classList.remove('show');
+    document.getElementById('analyze-btn').disabled = false;
+    showError('Analysis failed. Please check the URL and try again.');
+    console.error(e);
+  }
+}
+
+function toggleSolution(id) {
+  if (!lastReport) return;
+  lastReport.solutions[id].selected = !lastReport.solutions[id].selected;
+  const el = document.getElementById('sol-' + id);
+  el.classList.toggle('selected', lastReport.solutions[id].selected);
+}
+
+function scoreColor(s) { return s >= 75 ? '#10b981' : s >= 50 ? '#f59e0b' : '#ef4444'; }
+function priorityClass(p) { return p === 'Quick Win' ? 'quick' : p === 'Mid-term' ? 'mid' : 'strategic'; }
+
+function renderReport(r) {
+  const b = r.business;
+  const score = r.leadScore || 0;
+  const color = scoreColor(score);
+  const circ = 2 * Math.PI * 45;
+  const dash = (score / 100) * circ;
+  const ratingStyle = score >= 75 ? 'background:rgba(16,185,129,0.15);color:#10b981' : score >= 50 ? 'background:rgba(245,158,11,0.15);color:#f59e0b' : 'background:rgba(239,68,68,0.15);color:#ef4444';
+
+  const contactRows = [
+    ['Key Contact', b.keyContact || '—'],
+    ['Email', b.email ? `<a href="mailto:${b.email}">${b.email}</a>` : '—'],
+    ['Phone', b.phone ? `<a href="tel:${b.phone}">${b.phone}</a>` : '—'],
+    ['Address', b.address || '—'],
+    ['Social', b.social || '—'],
+    ['Website', b.website ? `<a href="${b.website}" target="_blank">${b.website}</a>` : '—'],
+  ];
+  const bizRows = [
+    ['Industry', b.industry], ['Size', b.size],
+    ['Location', b.location], ['Tech Stack', b.currentTools],
+  ];
+
+  const solutionsHTML = r.solutions.map(s => `
+    <div class="solution selected" id="sol-${s.id}" onclick="toggleSolution(${s.id})">
+      <div class="sol-top">
+        <div class="sol-checkbox">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="sol-body">
+          <div class="sol-header">
+            <h4>${s.title}</h4>
+            <div class="sol-tags"><span class="tag ${priorityClass(s.priority)}">${s.priority}</span></div>
+          </div>
+          <p class="sol-desc">${s.description}</p>
+          <div class="sol-pricing">
+            <div class="price-pill"><span>Setup Fee</span><strong>${s.setupFee||'—'}</strong></div>
+            <div class="price-pill"><span>Monthly</span><strong>${s.monthlyFee||'—'}</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>`).join('');
+
+  const html = `
+    <div class="action-bar">
+      <button class="new-btn" onclick="resetApp()">← New Analysis</button>
+      <button class="pdf-btn" onclick="window.print()">📄 Download PDF</button>
+      <button class="gamma-btn" onclick="openGamma()">⚡ Gamma Prompt</button>
+    </div>
+
+    <div id="report-content">
+      <div class="lead-score-card">
+        <div class="score-ring">
+          <svg width="110" height="110" viewBox="0 0 110 110">
+            <circle cx="55" cy="55" r="45" fill="none" stroke="#1a1a28" stroke-width="10"/>
+            <circle cx="55" cy="55" r="45" fill="none" stroke="${color}" stroke-width="10"
+              stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/>
+          </svg>
+          <div class="score-text">
+            <span class="num" style="color:${color}">${score}</span>
+            <span class="lbl">Lead Score</span>
+          </div>
+        </div>
+        <div class="lead-info">
+          <h2>${b.name||'Business'}</h2>
+          <p>${b.description}</p>
+          <span class="score-badge" style="${ratingStyle}">${r.leadRating}</span>
+          <p style="margin-top:10px;color:var(--muted);font-size:0.82rem;">${r.leadJustification}</p>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <h3>📋 Business Profile</h3>
+          ${bizRows.map(([k,v])=>`<div class="info-row"><span class="key">${k}</span><span class="val">${v||'—'}</span></div>`).join('')}
+        </div>
+        <div class="card">
+          <h3>📞 Contact Details</h3>
+          ${contactRows.map(([k,v])=>`<div class="info-row"><span class="key">${k}</span><span class="val">${v}</span></div>`).join('')}
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:20px;">
+        <h3>⚠️ Identified Pain Points</h3>
+        ${(r.painPoints||[]).map(p=>`<div class="info-row"><span class="val">⚠️ ${p}</span></div>`).join('')}
+      </div>
+
+      <div class="solutions-card">
+        <h3>🤖 AI Solutions & Pricing</h3>
+        <p class="solutions-hint">Click each solution to select/deselect for the Gamma presentation</p>
+        ${solutionsHTML}
+        <div class="total-box">
+          <span class="total-label">Total Estimated Investment</span>
+          <span class="total-val">Setup: ${r.totalSetup||'—'} &nbsp;|&nbsp; Monthly: ${r.totalMonthly||'—'}</span>
+        </div>
+      </div>
+
+      <div class="outreach-card">
+        <h3>✉️ Ready-to-Send Outreach Message</h3>
+        <p id="outreach-text">${r.outreachMessage}</p>
+        <button class="copy-btn" onclick="copyOutreach()">📋 Copy Message</button>
+      </div>
+    </div>`;
+
+  document.getElementById('report').innerHTML = html;
+  document.getElementById('report').classList.add('show');
+}
+
+function openGamma() {
+  if (!lastReport) return;
+  const b = lastReport.business;
+  const selected = lastReport.solutions.filter(s => s.selected);
+  if (!selected.length) { alert('Please select at least one solution first.'); return; }
+
+  const solutionsList = selected.map((s,i) =>
+    `${i+1}. ${s.title} (${s.priority})\n   ${s.description}\n   Setup: ${s.setupFee} | Monthly: ${s.monthlyFee}`
+  ).join('\n\n');
+
+  const prompt = `Create a professional AI sales presentation for a client with the following details:
+
+COMPANY: ${b.name}
+INDUSTRY: ${b.industry}
+LOCATION: ${b.location}
+SIZE: ${b.size}
+WEBSITE: ${b.website}
+KEY CONTACT: ${b.keyContact || 'Decision Maker'}
+
+BUSINESS DESCRIPTION:
+${b.description}
+
+IDENTIFIED PAIN POINTS:
+${(lastReport.painPoints||[]).map((p,i)=>`${i+1}. ${p}`).join('\n')}
+
+PROPOSED AI SOLUTIONS:
+${solutionsList}
+
+TOTAL INVESTMENT:
+Setup: ${lastReport.totalSetup}
+Monthly: ${lastReport.totalMonthly}
+
+PRESENTATION STRUCTURE:
+Slide 1: Cover — "AI Transformation Proposal for ${b.name}"
+Slide 2: About ${b.name} — who they are, what they do
+Slide 3: Current Challenges — their pain points visualized
+Slide 4-${3+selected.length}: One slide per AI solution — what it is, how it works, the benefit
+Slide ${4+selected.length}: Investment Overview — setup fees, monthly costs, ROI potential
+Slide ${5+selected.length}: Why Act Now — urgency, competitive advantage
+Slide ${6+selected.length}: Next Steps — call to action, contact info
+
+TONE: Professional, modern, confident. Focus on business outcomes and ROI, not technical jargon. Make it feel tailored specifically to ${b.name}.`;
+
+  document.getElementById('gamma-text').value = prompt;
+  document.getElementById('gamma-modal').classList.add('show');
+}
+
+function closeGamma() { document.getElementById('gamma-modal').classList.remove('show'); }
+
+function copyGamma() {
+  const text = document.getElementById('gamma-text').value;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.modal-copy');
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = '📋 Copy Prompt', 2000);
+  });
+}
+
+function resetApp() {
+  document.getElementById('report').classList.remove('show');
+  document.getElementById('report').innerHTML = '';
+  document.getElementById('url-input').value = '';
+  document.getElementById('error-box').classList.remove('show');
+  lastReport = null;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function copyOutreach() {
+  const text = document.getElementById('outreach-text').innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = '📋 Copy Message', 2000);
+  });
+}
+</script>
+</body>
+</html>
